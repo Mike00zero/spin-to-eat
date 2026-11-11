@@ -7,25 +7,38 @@ import { Button, Chip, formatDistance, Price, Stars } from '../components/ui';
 import { Cuisine, Restaurant } from '../types';
 import { colors, radius, shadow } from '../theme';
 
-const EDGE_WIDTH = 30; // swipe must start this close to the left edge (keeps the photo carousel swipeable)
 const DISMISS_FRACTION = 0.35; // drag past this much of the screen to go back…
 const DISMISS_VELOCITY = 0.6; // …or flick faster than this (px/ms)
+const GALLERY_HEIGHT = 280;
 
 /**
- * iOS-style "swipe from the left edge to go back". The page follows the finger;
+ * Swipe right anywhere on the page to go back (except where `isBlocked` says the touch
+ * belongs to something else, like the photo gallery). The page follows the finger;
  * letting go far enough (or with a flick) slides it away and calls onBack, otherwise
  * it springs back into place.
  */
-function useSwipeBack(width: number, onBack: () => void) {
+function useSwipeBack(width: number, onBack: () => void, isBlocked: (pageY: number) => boolean) {
   const x = useRef(new Animated.Value(0)).current;
-  const latest = useRef({ width, onBack });
-  latest.current = { width, onBack };
+  const latest = useRef({ width, onBack, isBlocked });
+  latest.current = { width, onBack, isBlocked };
+
+  // Where the finger first touched down. PanResponder's own x0/y0 stay 0 until it has been
+  // granted the gesture, so they can't be used to decide whether to take it.
+  const startY = useRef(0);
 
   const responder = useRef(
     PanResponder.create({
-      // Capture so the horizontal photo ScrollView doesn't grab an edge swipe first.
+      // Runs on every touch-down (parents first); just record the start point, never claim it.
+      onStartShouldSetPanResponderCapture: (e) => {
+        startY.current = e.nativeEvent.pageY;
+        return false;
+      },
+      // Take over a clearly horizontal, rightward drag. Mostly-vertical drags are left to
+      // the page's scroll view, and drags that start on the gallery page the photos.
       onMoveShouldSetPanResponderCapture: (_, g) =>
-        g.x0 <= EDGE_WIDTH && g.dx > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+        g.dx > 10 &&
+        Math.abs(g.dx) > Math.abs(g.dy) * 2 &&
+        !latest.current.isBlocked(startY.current),
       onPanResponderMove: (_, g) => x.setValue(Math.max(0, g.dx)),
       onPanResponderRelease: (_, g) => {
         const { width: w, onBack: back } = latest.current;
@@ -47,7 +60,11 @@ function useSwipeBack(width: number, onBack: () => void) {
 export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: Restaurant; cuisine: Cuisine; onBack: () => void }) {
   const { width } = useWindowDimensions();
   const photos = r.photos.length ? r.photos : [undefined];
-  const swipe = useSwipeBack(width, onBack);
+  // The gallery sits at the top of the scroll view, so its on-screen bottom edge moves
+  // up as the page scrolls. Swipes that start on it page the photos instead of going back.
+  // (This screen fills the window, so a touch's pageY is measured from the gallery's top.)
+  const scrollY = useRef(0);
+  const swipe = useSwipeBack(width, onBack, (pageY) => pageY < GALLERY_HEIGHT - scrollY.current);
 
   const openDirections = () => {
     const { latitude, longitude } = r.location;
@@ -68,11 +85,17 @@ export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: 
 
   return (
     <Animated.View style={[styles.root, styles.edgeShadow, { transform: [{ translateX: swipe.x }] }]} {...swipe.handlers}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+      >
         <View>
           <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
             {photos.map((uri, i) => (
-              <Photo key={i} uri={uri} cuisine={cuisine} height={280} width={width} rounded={false} />
+              <Photo key={i} uri={uri} cuisine={cuisine} height={GALLERY_HEIGHT} width={width} rounded={false} />
             ))}
           </ScrollView>
           <SafeAreaView edges={['top']} style={styles.backWrap} pointerEvents="box-none">
