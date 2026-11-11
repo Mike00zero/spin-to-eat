@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Spin to Eat",
+    "slug": "spin-to-eat",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF6E8"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.spintoeat",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Spin to Eat uses your location to find restaurants near you."
+      }
+    },
+    "android": {
+      "package": "com.example.spintoeat",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFF6E8"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "REPLACE_WITH_ANDROID_MAPS_KEY"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Spin to Eat uses your location to find restaurants near you."
+        }
+      ],
+      "expo-status-bar"
+    ]
+  }
+}
