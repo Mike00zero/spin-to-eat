@@ -5,15 +5,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ResultsScreen } from './src/screens/ResultsScreen';
 import { DetailsScreen } from './src/screens/DetailsScreen';
+import { BattleScreen } from './src/screens/BattleScreen';
 import { useLocation } from './src/hooks/useLocation';
 import { Cuisine, Restaurant, SortMode } from './src/types';
 import { cuisineById } from './src/cuisines';
 import { colors } from './src/theme';
 
-// Three screens, so a tiny state machine is all the navigation we need.
+// A handful of screens, so a tiny state machine is all the navigation we need.
 // cuisine === null means "browse everything" (the user skipped the spin).
 type Route =
   | { name: 'home' }
+  | { name: 'battle' }
   | { name: 'results'; cuisine: Cuisine | null }
   | { name: 'details'; cuisine: Cuisine | null; restaurant: Restaurant };
 
@@ -28,7 +30,7 @@ export default function App() {
 
   const goBack = () => {
     if (route.name === 'details') setRoute({ name: 'results', cuisine: route.cuisine });
-    else if (route.name === 'results') setRoute({ name: 'home' });
+    else if (route.name === 'results' || route.name === 'battle') setRoute({ name: 'home' });
   };
 
   // Android hardware back button
@@ -41,15 +43,29 @@ export default function App() {
     return () => sub.remove();
   });
 
+  const showResults = (cuisine: Cuisine | null) => {
+    setCache(null);
+    setSort('rating');
+    setFilter(null);
+    setRoute({ name: 'results', cuisine });
+  };
+
   let screen: React.ReactNode;
   if (route.name === 'home') {
+    screen = <HomeScreen onFindPlaces={showResults} onBattle={() => setRoute({ name: 'battle' })} />;
+  } else if (route.name === 'battle') {
+    // Rendered before the location check: food-type battles don't need location.
     screen = (
-      <HomeScreen
-        onFindPlaces={(cuisine) => {
-          setCache(null);
+      <BattleScreen
+        coords={coords}
+        onBack={goBack}
+        onCuisine={showResults}
+        onRestaurant={(restaurant, list) => {
+          // Land on the winner's details; "back" goes to the battle's restaurant list.
+          setCache(list);
           setSort('rating');
           setFilter(null);
-          setRoute({ name: 'results', cuisine });
+          setRoute({ name: 'details', cuisine: null, restaurant });
         }}
       />
     );

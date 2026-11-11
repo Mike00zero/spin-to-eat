@@ -7,7 +7,7 @@ import { Cuisine } from '../types';
 import { colors, radius, shadow } from '../theme';
 
 /** onFindPlaces(null) means browse every cuisine without spinning. */
-export function HomeScreen({ onFindPlaces }: { onFindPlaces: (c: Cuisine | null) => void }) {
+export function HomeScreen({ onFindPlaces, onBattle }: { onFindPlaces: (c: Cuisine | null) => void; onBattle: () => void }) {
   const { width, height } = useWindowDimensions();
   const wheelSize = Math.min(width - 48, height * 0.46, 380);
   const wheel = useRef<SpinWheelHandle>(null);
@@ -73,6 +73,15 @@ export function HomeScreen({ onFindPlaces }: { onFindPlaces: (c: Cuisine | null)
         >
           <Text style={styles.browseText}>Skip the spin · browse all restaurants ›</Text>
         </Pressable>
+        <Pressable
+          onPress={onBattle}
+          disabled={spinning}
+          style={({ pressed }) => [styles.battle, { opacity: spinning ? 0.4 : pressed ? 0.6 : 1 }]}
+          hitSlop={8}
+          accessibilityRole="button"
+        >
+          <Text style={styles.battleText}>⚔️ Can't agree? Battle for it ›</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -87,6 +96,8 @@ const styles = StyleSheet.create({
   bottom: { paddingHorizontal: 20, paddingBottom: 16, minHeight: 210, justifyContent: 'flex-end' },
   idle: { alignItems: 'center', gap: 12 },
   browse: { alignSelf: 'center', paddingVertical: 10, marginTop: 6 },
+  battle: { alignSelf: 'center', paddingVertical: 6 },
+  battleText: { color: colors.red, fontWeight: '800', fontSize: 15 },
   browseText: { color: colors.navy, fontWeight: '700', fontSize: 15 },
   hint: { color: colors.muted, fontSize: 14 },
   resultCard: {
