@@ -45,7 +45,8 @@
           "locationWhenInUsePermission": "Spin to Eat uses your location to find restaurants near you."
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-audio"
     ]
   }
 }
