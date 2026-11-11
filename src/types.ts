@@ -28,5 +28,6 @@ export type Restaurant = {
   reviews: Review[];
   openNow?: boolean;
   mapsUrl?: string;
+  reviewsUrl?: string; // Google Maps page listing all reviews
   distanceKm: number;
 };

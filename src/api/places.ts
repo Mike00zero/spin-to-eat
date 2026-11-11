@@ -17,6 +17,7 @@ const FIELD_MASK = [
   'places.photos',
   'places.reviews',
   'places.googleMapsUri',
+  'places.googleMapsLinks.reviewsUri',
   'places.currentOpeningHours.openNow',
 ].join(',');
 
@@ -106,6 +107,7 @@ export async function searchRestaurants(cuisine: Cuisine, near: Coords): Promise
         reviews,
         openNow: p.currentOpeningHours?.openNow,
         mapsUrl: p.googleMapsUri,
+        reviewsUrl: p.googleMapsLinks?.reviewsUri,
         distanceKm: distanceKm(near, location),
       };
     })

@@ -21,6 +21,13 @@ export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: 
     Linking.openURL(url).catch(() => {});
   };
 
+  // Prefer the dedicated reviews link from Places; otherwise fall back to the
+  // place's Maps page, or a Maps search by name + address (demo mode).
+  const allReviewsUrl =
+    r.reviewsUrl ??
+    r.mapsUrl ??
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${r.name} ${r.address}`)}`;
+
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
@@ -105,6 +112,16 @@ export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: 
               {!!rev.text && <Text style={styles.reviewText}>{rev.text}</Text>}
             </View>
           ))}
+          <Pressable
+            onPress={() => Linking.openURL(allReviewsUrl).catch(() => {})}
+            style={({ pressed }) => [styles.allReviews, pressed && { opacity: 0.6 }]}
+            hitSlop={8}
+            accessibilityRole="link"
+          >
+            <Text style={styles.allReviewsText}>
+              Read all {r.ratingCount > 0 ? `${r.ratingCount.toLocaleString()} ` : ''}reviews on Google ›
+            </Text>
+          </Pressable>
           <Text style={styles.attrib}>Reviews & photos from Google</Text>
         </View>
       </ScrollView>
@@ -144,5 +161,7 @@ const styles = StyleSheet.create({
   review: { backgroundColor: colors.card, borderRadius: radius.md, padding: 14, marginBottom: 10 },
   avatar: { width: 36, height: 36, borderRadius: 18 },
   reviewText: { marginTop: 8, color: colors.ink, lineHeight: 20 },
+  allReviews: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16, marginTop: 4 },
+  allReviewsText: { color: colors.red, fontWeight: '800', fontSize: 15 },
   attrib: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 10 },
 });
