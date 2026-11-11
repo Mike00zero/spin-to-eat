@@ -75,7 +75,9 @@ let audioConfigured = false;
 function configureAudio() {
   if (audioConfigured) return;
   audioConfigured = true;
-  setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {});
+  // playsInSilentMode: false → the wheel stays quiet when the phone's mute switch is on
+  // (game sound effects shouldn't override it). mixWithOthers keeps the user's music playing.
+  setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
 }
 
 const PRIME_FALLBACK_MS = 1500; // if a player never reports loading, use it anyway after this
