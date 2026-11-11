@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, BackHandler, View } from 'react-native';
+import { ActivityIndicator, BackHandler, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -59,10 +59,11 @@ export default function App() {
         <ActivityIndicator size="large" color={colors.orange} />
       </View>
     );
-  } else if (route.name === 'results') {
-    screen = (
+  } else {
+    const cuisine = route.cuisine;
+    const results = (
       <ResultsScreen
-        cuisine={route.cuisine}
+        cuisine={cuisine}
         coords={coords}
         usingFallbackLocation={usingFallback}
         cache={cache}
@@ -72,11 +73,21 @@ export default function App() {
         filter={filter}
         setFilter={setFilter}
         onBack={goBack}
-        onOpen={(restaurant) => setRoute({ name: 'details', cuisine: route.cuisine, restaurant })}
+        onOpen={(restaurant) => setRoute({ name: 'details', cuisine, restaurant })}
       />
     );
-  } else {
-    screen = <DetailsScreen restaurant={route.restaurant} cuisine={cuisineById(route.restaurant.cuisineId)} onBack={goBack} />;
+    screen =
+      route.name === 'results' ? (
+        results
+      ) : (
+        // Results stay rendered underneath so swiping the details page aside reveals them.
+        <View style={{ flex: 1 }}>
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {results}
+          </View>
+          <DetailsScreen restaurant={route.restaurant} cuisine={cuisineById(route.restaurant.cuisineId)} onBack={goBack} />
+        </View>
+      );
   }
 
   return (

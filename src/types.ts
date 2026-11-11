@@ -28,6 +28,7 @@ export type Restaurant = {
   photos: string[]; // image URLs
   reviews: Review[];
   openNow?: boolean;
+  hours?: string[]; // 7 lines, Monday first, e.g. "Monday: 11:00 AM – 10:00 PM"
   mapsUrl?: string;
   websiteUrl?: string;
   reviewsUrl?: string; // Google Maps page listing all reviews

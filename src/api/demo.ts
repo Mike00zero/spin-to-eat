@@ -14,6 +14,10 @@ const NAME_PARTS: Record<string, string[]> = {
   pizza: ['Slice of Heaven', 'Brick Oven Co.', 'Pie Hole', 'Napoli Express', 'Crust & Crumb', 'Tony’s Pizzeria'],
 };
 
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const OPEN_TIMES = ['11:00 AM', '11:30 AM', '12:00 PM', '4:00 PM'];
+const CLOSE_TIMES = ['9:00 PM', '10:00 PM', '10:30 PM', '11:00 PM'];
+
 const STREETS = ['Main St', 'Oak Ave', 'Elm St', 'Maple Dr', 'Park Blvd', 'Market St', 'River Rd', '2nd Ave'];
 
 const REVIEW_SNIPPETS = [
@@ -62,6 +66,14 @@ export function demoRestaurants(cuisine: Cuisine, near: Coords): Restaurant[] {
         text: REVIEW_SNIPPETS[(i * 2 + k) % REVIEW_SNIPPETS.length],
       })),
       openNow: rand() > 0.25,
+      hours: (() => {
+        const open = OPEN_TIMES[Math.floor(rand() * OPEN_TIMES.length)];
+        const close = CLOSE_TIMES[Math.floor(rand() * CLOSE_TIMES.length)];
+        const closedMonday = rand() < 0.3;
+        return DAYS.map((d, k) =>
+          k === 0 && closedMonday ? `${d}: Closed` : `${d}: ${open} – ${k >= 4 ? '11:30 PM' : close}`,
+        );
+      })(),
       distanceKm: Math.sqrt(dLat * dLat + dLon * dLon),
     };
   });

@@ -21,6 +21,8 @@ const FIELD_MASK = [
   'places.googleMapsLinks.reviewsUri',
   'places.websiteUri',
   'places.currentOpeningHours.openNow',
+  'places.currentOpeningHours.weekdayDescriptions',
+  'places.regularOpeningHours.weekdayDescriptions',
 ].join(',');
 
 const PRICE_LEVELS: Record<string, number | null> = {
@@ -127,6 +129,8 @@ export async function searchRestaurants(cuisine: Cuisine, near: Coords): Promise
         photos: (p.photos ?? []).slice(0, 6).map((ph: any) => photoUrl(ph.name)),
         reviews,
         openNow: p.currentOpeningHours?.openNow,
+        // This week's hours (includes holiday changes); fall back to the usual schedule.
+        hours: p.currentOpeningHours?.weekdayDescriptions ?? p.regularOpeningHours?.weekdayDescriptions,
         mapsUrl: p.googleMapsUri,
         reviewsUrl: p.googleMapsLinks?.reviewsUri,
         websiteUrl: p.websiteUri,

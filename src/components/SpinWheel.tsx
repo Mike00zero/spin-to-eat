@@ -2,7 +2,7 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
-import { AudioPlayer, createAudioPlayer } from 'expo-audio';
+import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { CUISINES, SEGMENT_DEGREES } from '../cuisines';
 import { Cuisine } from '../types';
 
@@ -14,9 +14,20 @@ type Props = {
   onResult: (cuisine: Cuisine) => void;
 };
 
-const SPIN_MS = 4200;
-const SPIN_EASING = Easing.bezier(0.15, 0.85, 0.25, 1);
-const CLICK_POOL = 8; // several players so rapid ticks can overlap instead of cutting each other off
+const SPIN_MS = 10000;
+// Fast launch, then a long coast with a drawn-out crawl over the last few wedges,
+// so you can hear the clicks spread out one by one before it settles.
+const SPIN_EASING = Easing.bezier(0.1, 0.7, 0.1, 1);
+const CLICK_POOL = 10; // several players so rapid ticks can overlap instead of cutting each other off
+const TICK_SOUNDS = [
+  require('../../assets/tick1.wav'),
+  require('../../assets/tick2.wav'),
+  require('../../assets/tick3.wav'),
+];
+const FULL_SPEED = 1500; // deg/s treated as "top speed" when mapping speed to sound
+// At top speed edges pass ~50×/s; spacing clicks at least this far apart keeps them from
+// piling on top of each other (which sums into clipping). Inaudible as a skip at that speed.
+const MIN_TICK_GAP_MS = 30;
 const HAPTIC_GAP_MS = 45; // light haptic with each tick, capped so it doesn't turn into a buzz
 const POINTER = 52; // pointer size in px
 const POINTER_OVERHANG = 24; // how far the pointer sits above the wheel's top edge
@@ -58,19 +69,43 @@ function Pointer() {
   );
 }
 
+// Start the audio session up front instead of on the first tick; waking it mid-spin
+// is one cause of a crackly first spin.
+let audioConfigured = false;
+function configureAudio() {
+  if (audioConfigured) return;
+  audioConfigured = true;
+  setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {});
+}
+
+const PRIME_FALLBACK_MS = 1500; // if a player never reports loading, use it anyway after this
+
 /**
- * A pool of players that are always parked at 0 and ready to fire instantly.
- * (Calling seekTo(0) then play() right away is racy: seekTo is async, so play() often
- * runs while the player is still at the end of the clip and the tick is silently lost.)
+ * A pool of "ball hits a fret" click players, always parked at 0 and ready to fire
+ * instantly. (Calling seekTo(0) then play() right away is racy: seekTo is async, so play()
+ * often runs while the player is still at the end of the clip and the tick is silently lost.)
+ * Three slightly different clicks are mixed so fast runs don't sound like a machine gun.
  */
 function useTickPool() {
   const pool = useRef<{ player: AudioPlayer; ready: boolean }[]>([]);
 
   useEffect(() => {
-    const entries = Array.from({ length: CLICK_POOL }, () => {
-      const entry = { player: createAudioPlayer(require('../../assets/click.wav')), ready: true };
-      entry.player.volume = 0.7;
+    configureAudio();
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const entries = Array.from({ length: CLICK_POOL }, (_, i) => {
+      // Not ready until loaded and primed: each player plays once silently first, so the
+      // decoder and output are warm and the first real spin doesn't crackle.
+      const entry = { player: createAudioPlayer(TICK_SOUNDS[i % TICK_SOUNDS.length]), ready: false, primed: false };
+      const prime = () => {
+        if (entry.primed) return;
+        entry.primed = true;
+        entry.player.volume = 0;
+        entry.player.play();
+      };
+      if (entry.player.isLoaded) prime();
+      timers.push(setTimeout(() => { if (!entry.primed) { entry.primed = true; entry.ready = true; } }, PRIME_FALLBACK_MS));
       entry.player.addListener('playbackStatusUpdate', (status) => {
+        if (status.isLoaded && !entry.primed) prime();
         if (status.didJustFinish) {
           entry.player.pause();
           entry.player.seekTo(0).then(() => { entry.ready = true; }).catch(() => { entry.ready = true; });
@@ -79,13 +114,24 @@ function useTickPool() {
       return entry;
     });
     pool.current = entries;
-    return () => entries.forEach((e) => e.player.remove());
+    return () => {
+      timers.forEach(clearTimeout);
+      entries.forEach((e) => e.player.remove());
+    };
   }, []);
 
-  return () => {
-    const entry = pool.current.find((e) => e.ready);
-    if (!entry) return; // every player is mid-tick; at that speed one more wouldn't be heard anyway
+  const lastPlayed = useRef(0);
+
+  /** speed: 0 (stopped) … 1 (full speed). Ticks get louder as the wheel slows. */
+  return (speed: number) => {
+    const now = Date.now();
+    if (now - lastPlayed.current < MIN_TICK_GAP_MS) return;
+    const ready = pool.current.filter((e) => e.ready);
+    if (!ready.length) return; // every player is mid-tick; at that speed one more wouldn't be heard anyway
+    const entry = ready[Math.floor(Math.random() * ready.length)];
     entry.ready = false;
+    lastPlayed.current = now;
+    entry.player.volume = 0.3 + 0.6 * (1 - speed);
     entry.player.play();
   };
 }
@@ -98,9 +144,11 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
   const lastHaptic = useRef(0);
   const [spinning, setSpinning] = useState(false);
   const playTick = useTickPool();
+  const speed = useRef(0); // current wheel speed, 0 … 1
+  const lastSample = useRef({ value: 0, time: 0 });
 
   const tick = () => {
-    playTick();
+    playTick(speed.current);
     // Kick the pointer like a peg just hit it, then let it spring back.
     flapper.setValue(1);
     Animated.spring(flapper, { toValue: 0, speed: 40, bounciness: 6, useNativeDriver: true }).start();
@@ -115,6 +163,15 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
   // frame: a tick fires precisely when a wedge edge (every SEGMENT_DEGREES) crosses the pointer.
   useEffect(() => {
     const id = rotation.addListener(({ value }) => {
+      // Measure how fast the wheel is turning right now so the sound can follow it.
+      const now = Date.now();
+      const prev = lastSample.current;
+      if (now > prev.time) {
+        const degPerSec = ((value - prev.value) / (now - prev.time)) * 1000;
+        speed.current = Math.max(0, Math.min(1, degPerSec / FULL_SPEED));
+        lastSample.current = { value, time: now };
+      }
+
       const wedge = Math.floor(value / SEGMENT_DEGREES);
       if (wedge !== lastWedge.current) {
         lastWedge.current = wedge;
@@ -129,6 +186,7 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
     setSpinning(true);
     onSpinStart?.();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    lastSample.current = { value: total.current, time: Date.now() };
 
     const index = Math.floor(Math.random() * CUISINES.length);
     // Wedge `index` is centered at (index + 0.5) * SEGMENT clockwise from 12 o'clock.
@@ -137,7 +195,7 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
     const jitter = (Math.random() - 0.5) * SEGMENT_DEGREES * 0.6; // land off-center, feels natural
     const targetMod = (((360 - center + jitter) % 360) + 360) % 360;
     const currentMod = ((total.current % 360) + 360) % 360;
-    const extraTurns = 5 + Math.floor(Math.random() * 3);
+    const extraTurns = 7 + Math.floor(Math.random() * 3); // more turns keep the launch fast over a long spin
     const delta = extraTurns * 360 + ((targetMod - currentMod + 360) % 360);
     total.current += delta;
 
@@ -148,6 +206,7 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
       // JS-driven on purpose: keeps the drawn angle and the tick listener in perfect sync.
       useNativeDriver: false,
     }).start(() => {
+      speed.current = 0;
       setSpinning(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       onResult(CUISINES[index]);
