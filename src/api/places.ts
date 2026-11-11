@@ -1,4 +1,5 @@
-import { Coords, Cuisine, Restaurant, Review } from '../types';
+import { Coords, Cuisine, Restaurant, Review, SortMode } from '../types';
+import { CUISINES } from '../cuisines';
 import { demoRestaurants } from './demo';
 
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY ?? '';
@@ -18,6 +19,7 @@ const FIELD_MASK = [
   'places.reviews',
   'places.googleMapsUri',
   'places.googleMapsLinks.reviewsUri',
+  'places.websiteUri',
   'places.currentOpeningHours.openNow',
 ].join(',');
 
@@ -45,9 +47,27 @@ function photoUrl(photoName: string, width = 800) {
   return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${width}&key=${API_KEY}`;
 }
 
-/** Highest rated first; ties broken by number of reviews. */
+/** Highest rated first; ties broken by distance (nearest to the user first). */
 export function sortByRating(list: Restaurant[]): Restaurant[] {
-  return [...list].sort((a, b) => b.rating - a.rating || b.ratingCount - a.ratingCount);
+  return [...list].sort((a, b) => b.rating - a.rating || a.distanceKm - b.distanceKm);
+}
+
+/** Sort for the results screen. Ties fall back to rating, then distance. */
+export function sortRestaurants(list: Restaurant[], mode: SortMode): Restaurant[] {
+  const byRating = (a: Restaurant, b: Restaurant) => b.rating - a.rating || a.distanceKm - b.distanceKm;
+  switch (mode) {
+    case 'price':
+      // Cheapest first; places with no price info go last.
+      return [...list].sort(
+        (a, b) => (a.priceLevel ?? Infinity) - (b.priceLevel ?? Infinity) || byRating(a, b),
+      );
+    case 'nearest':
+      return [...list].sort((a, b) => a.distanceKm - b.distanceKm || b.rating - a.rating);
+    case 'farthest':
+      return [...list].sort((a, b) => b.distanceKm - a.distanceKm || b.rating - a.rating);
+    default:
+      return sortByRating(list);
+  }
 }
 
 /**
@@ -97,6 +117,7 @@ export async function searchRestaurants(cuisine: Cuisine, near: Coords): Promise
       }));
       return {
         id: p.id,
+        cuisineId: cuisine.id,
         name: p.displayName?.text ?? 'Unnamed',
         address: p.formattedAddress ?? '',
         location,
@@ -108,6 +129,7 @@ export async function searchRestaurants(cuisine: Cuisine, near: Coords): Promise
         openNow: p.currentOpeningHours?.openNow,
         mapsUrl: p.googleMapsUri,
         reviewsUrl: p.googleMapsLinks?.reviewsUri,
+        websiteUrl: p.websiteUri,
         distanceKm: distanceKm(near, location),
       };
     })
@@ -115,4 +137,27 @@ export async function searchRestaurants(cuisine: Cuisine, near: Coords): Promise
     .filter((r) => r.distanceKm <= (SEARCH_RADIUS_METERS / 1000) * 2);
 
   return sortByRating(restaurants);
+}
+
+/**
+ * Browse mode: run every wheel cuisine's search in parallel and merge them,
+ * so each result is tagged with a cuisine the user can filter by. A place
+ * found by more than one search keeps the first cuisine (wheel order).
+ * Costs one Places request per cuisine (8 total).
+ */
+export async function searchAllRestaurants(near: Coords): Promise<Restaurant[]> {
+  const settled = await Promise.allSettled(CUISINES.map((c) => searchRestaurants(c, near)));
+  const ok = settled.filter((s): s is PromiseFulfilledResult<Restaurant[]> => s.status === 'fulfilled');
+  if (ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
+
+  const seen = new Set<string>();
+  const merged: Restaurant[] = [];
+  for (const { value } of ok) {
+    for (const r of value) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      merged.push(r);
+    }
+  }
+  return sortByRating(merged);
 }

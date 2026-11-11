@@ -1,15 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Callout, Marker } from 'react-native-maps';
-import { isDemoMode, searchRestaurants } from '../api/places';
+import { isDemoMode, searchAllRestaurants, searchRestaurants, sortRestaurants } from '../api/places';
+import { CUISINES, cuisineById } from '../cuisines';
 import { RestaurantCard } from '../components/RestaurantCard';
 import { Button, formatDistance, Price } from '../components/ui';
-import { Coords, Cuisine, Restaurant } from '../types';
+import { Coords, Cuisine, Restaurant, SortMode } from '../types';
 import { colors, radius } from '../theme';
 
+const SORT_OPTIONS: { mode: SortMode; label: string; description: string }[] = [
+  { mode: 'rating', label: '★ Top rated', description: 'Sorted by Google rating, highest first' },
+  { mode: 'price', label: '$ Price', description: 'Sorted by price, cheapest first' },
+  { mode: 'nearest', label: 'Nearest', description: 'Sorted by distance, nearest first' },
+  { mode: 'farthest', label: 'Farthest', description: 'Sorted by distance, farthest first' },
+];
+
 type Props = {
-  cuisine: Cuisine;
+  cuisine: Cuisine | null; // null = browse all cuisines
   coords: Coords;
   usingFallbackLocation: boolean;
   onBack: () => void;
@@ -17,20 +25,31 @@ type Props = {
   // Keeps results when returning from the details screen.
   cache: Restaurant[] | null;
   setCache: (r: Restaurant[]) => void;
+  sort: SortMode;
+  setSort: (s: SortMode) => void;
+  filter: string | null; // cuisine id, browse mode only
+  setFilter: (id: string | null) => void;
 };
 
-export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, onOpen, cache, setCache }: Props) {
+export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, onOpen, cache, setCache, sort, setSort, filter, setFilter }: Props) {
   const [tab, setTab] = useState<'list' | 'map'>('list');
-  const [items, setItems] = useState<Restaurant[] | null>(cache);
+  const [results, setResults] = useState<Restaurant[] | null>(cache);
+  const browsing = cuisine === null;
+  const items = useMemo(() => {
+    if (!results) return null;
+    const shown = browsing && filter ? results.filter((r) => r.cuisineId === filter) : results;
+    return sortRestaurants(shown, sort);
+  }, [results, sort, filter, browsing]);
+  const filterLabel = (filter ? cuisineById(filter).label : 'restaurant').toLowerCase();
   const [error, setError] = useState<string | null>(null);
   const map = useRef<MapView>(null);
 
   const load = useCallback(async () => {
     setError(null);
-    setItems(null);
+    setResults(null);
     try {
-      const list = await searchRestaurants(cuisine, coords);
-      setItems(list);
+      const list = cuisine ? await searchRestaurants(cuisine, coords) : await searchAllRestaurants(coords);
+      setResults(list);
       setCache(list);
     } catch (e: any) {
       setError(e?.message ?? 'Something went wrong.');
@@ -50,6 +69,12 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
     });
   };
 
+  // Re-frame the map when the cuisine filter changes the set of pins.
+  useEffect(() => {
+    if (tab === 'map') fitMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -57,10 +82,10 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
           <Text style={styles.backText}>‹ Spin</Text>
         </Pressable>
         <Text style={styles.title}>
-          {cuisine.emoji} {cuisine.label} near you
+          {cuisine ? `${cuisine.emoji} ${cuisine.label}` : '🍽️ Restaurants'} near you
         </Text>
         <Text style={styles.sub}>
-          Sorted by Google rating, highest first
+          {SORT_OPTIONS.find((o) => o.mode === sort)!.description}
           {usingFallbackLocation ? ' · location off, showing NYC' : ''}
         </Text>
         <View style={styles.tabs}>
@@ -70,6 +95,42 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
             </Pressable>
           ))}
         </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sorts}>
+          {SORT_OPTIONS.map((o) => {
+            const active = o.mode === sort;
+            return (
+              <Pressable
+                key={o.mode}
+                onPress={() => setSort(o.mode)}
+                style={[styles.sortChip, active && styles.sortChipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.sortText, active && styles.sortTextActive]}>{o.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        {browsing && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sorts}>
+            {[null, ...CUISINES].map((c) => {
+              const active = (c?.id ?? null) === filter;
+              return (
+                <Pressable
+                  key={c?.id ?? 'all'}
+                  onPress={() => setFilter(c?.id ?? null)}
+                  style={[styles.sortChip, active && styles.filterChipActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.sortText, active && styles.sortTextActive]}>
+                    {c ? `${c.emoji} ${c.label}` : 'All'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
         {isDemoMode && <Text style={styles.demo}>Demo data · add a Google API key to see real restaurants</Text>}
       </View>
 
@@ -81,12 +142,16 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
       ) : !items ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.orange} />
-          <Text style={styles.sub}>Finding the best {cuisine.label.toLowerCase()}…</Text>
+          <Text style={styles.sub}>Finding the best {cuisine ? cuisine.label.toLowerCase() : 'food'} nearby…</Text>
         </View>
       ) : items.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.title}>No {cuisine.label.toLowerCase()} spots nearby</Text>
-          <Button title="Spin again" onPress={onBack} />
+          <Text style={styles.title}>No {cuisine ? cuisine.label.toLowerCase() : filterLabel} spots nearby</Text>
+          {browsing && filter ? (
+            <Button title="Show all restaurants" onPress={() => setFilter(null)} />
+          ) : (
+            <Button title={browsing ? 'Back' : 'Spin again'} onPress={onBack} />
+          )}
         </View>
       ) : tab === 'list' ? (
         <FlatList
@@ -94,7 +159,7 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
           keyExtractor={(r) => r.id}
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
           renderItem={({ item, index }) => (
-            <RestaurantCard restaurant={item} rank={index + 1} cuisine={cuisine} onPress={() => onOpen(item)} />
+            <RestaurantCard restaurant={item} rank={index + 1} cuisine={cuisineById(item.cuisineId)} onPress={() => onOpen(item)} />
           )}
           ListFooterComponent={<Text style={styles.attrib}>Ratings, reviews & photos from Google</Text>}
         />
@@ -141,6 +206,19 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#fff' },
   tabText: { fontWeight: '700', color: colors.muted },
   tabTextActive: { color: colors.ink },
+  sorts: { gap: 8, marginTop: 10 },
+  sortChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+  },
+  sortChipActive: { backgroundColor: colors.orange, borderColor: colors.orange },
+  sortText: { fontWeight: '700', color: colors.ink, fontSize: 13 },
+  filterChipActive: { backgroundColor: colors.navy, borderColor: colors.navy },
+  sortTextActive: { color: '#fff' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 },
   error: { color: colors.red, textAlign: 'center' },
   attrib: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 6 },

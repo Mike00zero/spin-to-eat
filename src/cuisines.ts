@@ -18,4 +18,8 @@ export const CUISINES: Cuisine[] = [
   { id: 'pizza', label: 'Pizza', emoji: '🍕', query: 'pizza restaurant', color: '#F9C230' },
 ];
 
+export function cuisineById(id: string): Cuisine {
+  return CUISINES.find((c) => c.id === id) ?? CUISINES[0];
+}
+
 export const SEGMENT_DEGREES = 360 / CUISINES.length;

@@ -1,10 +1,10 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import Svg, { Defs, LinearGradient, Polygon, Stop } from 'react-native-svg';
 import { AudioPlayer, createAudioPlayer } from 'expo-audio';
 import { CUISINES, SEGMENT_DEGREES } from '../cuisines';
 import { Cuisine } from '../types';
-import { colors } from '../theme';
 
 export type SpinWheelHandle = { spin: () => void };
 
@@ -18,6 +18,45 @@ const SPIN_MS = 4200;
 const SPIN_EASING = Easing.bezier(0.15, 0.85, 0.25, 1);
 const CLICK_POOL = 8; // several players so rapid ticks can overlap instead of cutting each other off
 const HAPTIC_GAP_MS = 45; // light haptic with each tick, capped so it doesn't turn into a buzz
+const POINTER = 52; // pointer size in px
+const POINTER_OVERHANG = 24; // how far the pointer sits above the wheel's top edge
+
+// Triangle corners in a 100×100 box. Every layer reuses them; thick round-joined
+// strokes are what give the shape its soft, rounded corners.
+const TRI = '14,14 86,14 50,80';
+
+/** Glossy red pointer with a thick white rim and a soft drop shadow. */
+function Pointer() {
+  return (
+    <Svg width={POINTER} height={POINTER} viewBox="0 0 100 100">
+      <Defs>
+        <LinearGradient id="red" x1="0" y1="0" x2="0.35" y2="1">
+          <Stop offset="0" stopColor="#FF6A45" />
+          <Stop offset="0.55" stopColor="#E8431E" />
+          <Stop offset="1" stopColor="#B81F12" />
+        </LinearGradient>
+        <LinearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="#FFFFFF" />
+          <Stop offset="1" stopColor="#F1E6DA" />
+        </LinearGradient>
+        <LinearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0.55" />
+          <Stop offset="0.45" stopColor="#FFFFFF" stopOpacity="0" />
+        </LinearGradient>
+      </Defs>
+      {/* drop shadow */}
+      <Polygon points={TRI} translateY={4} fill="#5A1E00" fillOpacity={0.28} stroke="#5A1E00" strokeOpacity={0.28} strokeWidth={22} strokeLinejoin="round" />
+      {/* white rim */}
+      <Polygon points={TRI} fill="url(#rim)" stroke="url(#rim)" strokeWidth={20} strokeLinejoin="round" />
+      {/* thin dark edge where the rim meets the red */}
+      <Polygon points={TRI} fill="#9E1A0E" stroke="#9E1A0E" strokeWidth={7} strokeLinejoin="round" />
+      {/* red body */}
+      <Polygon points={TRI} fill="url(#red)" stroke="url(#red)" strokeWidth={4} strokeLinejoin="round" />
+      {/* glossy highlight across the top */}
+      <Polygon points={TRI} fill="url(#gloss)" stroke="url(#gloss)" strokeWidth={4} strokeLinejoin="round" />
+    </Svg>
+  );
+}
 
 /**
  * A pool of players that are always parked at 0 and ready to fire instantly.
@@ -123,8 +162,8 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
   });
 
   return (
-    <View style={{ width: size, height: size + 18, alignItems: 'center' }}>
-      <Pressable onPress={spin} accessibilityRole="button" accessibilityLabel="Spin the food wheel" style={{ marginTop: 18 }}>
+    <View style={{ width: size, height: size + POINTER_OVERHANG, alignItems: 'center' }}>
+      <Pressable onPress={spin} accessibilityRole="button" accessibilityLabel="Spin the food wheel" style={{ marginTop: POINTER_OVERHANG }}>
         <Animated.View style={{ width: size, height: size, transform: [{ rotate }] }}>
           <Image source={require('../../assets/wheel.png')} style={{ width: size, height: size }} resizeMode="contain" />
         </Animated.View>
@@ -137,8 +176,7 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
           { transform: [{ rotate: flapper.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-22deg'] }) }] },
         ]}
       >
-        <View style={styles.pointerBorder} />
-        <View style={styles.pointer} />
+        <Pointer />
       </Animated.View>
     </View>
   );
@@ -146,27 +184,5 @@ export const SpinWheel = forwardRef<SpinWheelHandle, Props>(({ size, onSpinStart
 
 const styles = StyleSheet.create({
   // Sized to the pointer and pivoting at its top so it flicks like a flapper.
-  pointerWrap: { position: 'absolute', top: 0, width: 38, height: 38, alignItems: 'center', transformOrigin: 'top' },
-  pointerBorder: {
-    position: 'absolute',
-    top: -3,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 19,
-    borderRightWidth: 19,
-    borderTopWidth: 38,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#FFFFFF',
-  },
-  pointer: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 14,
-    borderRightWidth: 14,
-    borderTopWidth: 30,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.navy,
-  },
+  pointerWrap: { position: 'absolute', top: 0, width: POINTER, height: POINTER, transformOrigin: 'top' },
 });

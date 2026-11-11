@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SpinWheel, SpinWheelHandle } from '../components/SpinWheel';
 import { Button } from '../components/ui';
 import { Cuisine } from '../types';
 import { colors, radius, shadow } from '../theme';
 
-export function HomeScreen({ onFindPlaces }: { onFindPlaces: (c: Cuisine) => void }) {
+/** onFindPlaces(null) means browse every cuisine without spinning. */
+export function HomeScreen({ onFindPlaces }: { onFindPlaces: (c: Cuisine | null) => void }) {
   const { width, height } = useWindowDimensions();
   const wheelSize = Math.min(width - 48, height * 0.46, 380);
   const wheel = useRef<SpinWheelHandle>(null);
@@ -63,6 +64,15 @@ export function HomeScreen({ onFindPlaces }: { onFindPlaces: (c: Cuisine) => voi
             <Button title={spinning ? 'Spinning…' : 'SPIN'} onPress={() => wheel.current?.spin()} disabled={spinning} style={{ alignSelf: 'stretch' }} />
           </View>
         )}
+        <Pressable
+          onPress={() => onFindPlaces(null)}
+          disabled={spinning}
+          style={({ pressed }) => [styles.browse, { opacity: spinning ? 0.4 : pressed ? 0.6 : 1 }]}
+          hitSlop={8}
+          accessibilityRole="button"
+        >
+          <Text style={styles.browseText}>Skip the spin · browse all restaurants ›</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -76,6 +86,8 @@ const styles = StyleSheet.create({
   wheelArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   bottom: { paddingHorizontal: 20, paddingBottom: 16, minHeight: 210, justifyContent: 'flex-end' },
   idle: { alignItems: 'center', gap: 12 },
+  browse: { alignSelf: 'center', paddingVertical: 10, marginTop: 6 },
+  browseText: { color: colors.navy, fontWeight: '700', fontSize: 15 },
   hint: { color: colors.muted, fontSize: 14 },
   resultCard: {
     backgroundColor: colors.card,

@@ -18,6 +18,7 @@ export type Review = {
 
 export type Restaurant = {
   id: string;
+  cuisineId: string; // which wheel cuisine search found it
   name: string;
   address: string;
   location: Coords;
@@ -28,6 +29,9 @@ export type Restaurant = {
   reviews: Review[];
   openNow?: boolean;
   mapsUrl?: string;
+  websiteUrl?: string;
   reviewsUrl?: string; // Google Maps page listing all reviews
   distanceKm: number;
 };
+
+export type SortMode = 'rating' | 'price' | 'nearest' | 'farthest';

@@ -70,6 +70,18 @@ export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: 
             )}
           </View>
           {!!r.address && <Text style={[styles.meta, { marginTop: 12 }]}>{r.address}</Text>}
+          {!!r.websiteUrl && (
+            <Pressable
+              onPress={() => Linking.openURL(r.websiteUrl!).catch(() => {})}
+              style={({ pressed }) => [{ marginTop: 6, alignSelf: 'flex-start' }, pressed && { opacity: 0.6 }]}
+              hitSlop={8}
+              accessibilityRole="link"
+            >
+              <Text style={styles.website} numberOfLines={1}>
+                🌐 {r.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+              </Text>
+            </Pressable>
+          )}
 
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
             <Button title="Directions" onPress={openDirections} style={{ flex: 1 }} />
@@ -161,6 +173,7 @@ const styles = StyleSheet.create({
   review: { backgroundColor: colors.card, borderRadius: radius.md, padding: 14, marginBottom: 10 },
   avatar: { width: 36, height: 36, borderRadius: 18 },
   reviewText: { marginTop: 8, color: colors.ink, lineHeight: 20 },
+  website: { color: colors.red, fontWeight: '700', fontSize: 14 },
   allReviews: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16, marginTop: 4 },
   allReviewsText: { color: colors.red, fontWeight: '800', fontSize: 15 },
   attrib: { textAlign: 'center', color: colors.muted, fontSize: 12, marginTop: 10 },

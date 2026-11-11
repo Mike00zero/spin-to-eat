@@ -6,18 +6,24 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { ResultsScreen } from './src/screens/ResultsScreen';
 import { DetailsScreen } from './src/screens/DetailsScreen';
 import { useLocation } from './src/hooks/useLocation';
-import { Cuisine, Restaurant } from './src/types';
+import { Cuisine, Restaurant, SortMode } from './src/types';
+import { cuisineById } from './src/cuisines';
 import { colors } from './src/theme';
 
 // Three screens, so a tiny state machine is all the navigation we need.
+// cuisine === null means "browse everything" (the user skipped the spin).
 type Route =
   | { name: 'home' }
-  | { name: 'results'; cuisine: Cuisine }
-  | { name: 'details'; cuisine: Cuisine; restaurant: Restaurant };
+  | { name: 'results'; cuisine: Cuisine | null }
+  | { name: 'details'; cuisine: Cuisine | null; restaurant: Restaurant };
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [cache, setCache] = useState<Restaurant[] | null>(null);
+  // Lives here so the chosen sort survives a trip to the details screen.
+  const [sort, setSort] = useState<SortMode>('rating');
+  // Cuisine filter for browse mode; null = all.
+  const [filter, setFilter] = useState<string | null>(null);
   const { coords, usingFallback } = useLocation();
 
   const goBack = () => {
@@ -41,6 +47,8 @@ export default function App() {
       <HomeScreen
         onFindPlaces={(cuisine) => {
           setCache(null);
+          setSort('rating');
+          setFilter(null);
           setRoute({ name: 'results', cuisine });
         }}
       />
@@ -59,12 +67,16 @@ export default function App() {
         usingFallbackLocation={usingFallback}
         cache={cache}
         setCache={setCache}
+        sort={sort}
+        setSort={setSort}
+        filter={filter}
+        setFilter={setFilter}
         onBack={goBack}
         onOpen={(restaurant) => setRoute({ name: 'details', cuisine: route.cuisine, restaurant })}
       />
     );
   } else {
-    screen = <DetailsScreen restaurant={route.restaurant} cuisine={route.cuisine} onBack={goBack} />;
+    screen = <DetailsScreen restaurant={route.restaurant} cuisine={cuisineById(route.restaurant.cuisineId)} onBack={goBack} />;
   }
 
   return (

@@ -47,6 +47,7 @@ export function demoRestaurants(cuisine: Cuisine, near: Coords): Restaurant[] {
     const dLon = (longitude - near.longitude) * 111 * Math.cos((near.latitude * Math.PI) / 180);
     return {
       id: `demo-${cuisine.id}-${i}`,
+      cuisineId: cuisine.id,
       name,
       address: `${100 + Math.floor(rand() * 900)} ${STREETS[i % STREETS.length]}`,
       location: { latitude, longitude },
