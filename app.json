@@ -16,7 +16,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.pisanchik.spintoeat",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Spin to Eat uses your location to find restaurants near you."
+        "NSLocationWhenInUseUsageDescription": "Spin to Eat uses your location to find restaurants near you.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +28,8 @@
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "config": {
         "googleMaps": {
