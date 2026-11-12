@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import { Animated, Linking, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -61,6 +61,9 @@ function useSwipeBack(width: number, onBack: () => void, isBlocked: (pageY: numb
 export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: Restaurant; cuisine: Cuisine; onBack: () => void }) {
   const { width } = useWindowDimensions();
   const photos = r.photos.length ? r.photos : [undefined];
+  // Each Places photo is a billed request, so only load the page being shown and its
+  // neighbours (ready to swipe to). Pages further away load once the user gets close.
+  const [page, setPage] = useState(0);
   // The gallery sits at the top of the scroll view, so its on-screen bottom edge moves
   // up as the page scrolls. Swipes that start on it page the photos instead of going back.
   // (This screen fills the window, so a touch's pageY is measured from the gallery's top.)
@@ -94,10 +97,19 @@ export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: 
         }}
       >
         <View>
-          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-            {photos.map((uri, i) => (
-              <Photo key={i} uri={uri} cuisine={cuisine} height={GALLERY_HEIGHT} width={width} rounded={false} />
-            ))}
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
+          >
+            {photos.map((uri, i) =>
+              Math.abs(i - page) <= 1 ? (
+                <Photo key={i} uri={uri} cuisine={cuisine} height={GALLERY_HEIGHT} width={width} rounded={false} />
+              ) : (
+                <View key={i} style={{ width, height: GALLERY_HEIGHT, backgroundColor: colors.line }} />
+              ),
+            )}
           </ScrollView>
           <SafeAreaView edges={['top']} style={styles.backWrap} pointerEvents="box-none">
             <Pressable onPress={onBack} style={styles.backBtn} hitSlop={10}>

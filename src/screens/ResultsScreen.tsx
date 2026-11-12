@@ -179,6 +179,11 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
         <FlatList
           data={items}
           keyExtractor={(r) => r.id}
+          // Every card shows a billed Places photo. FlatList's defaults render about ten
+          // screens ahead, so keep the window small: cards (and photos) load as you scroll.
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
           refreshing={refreshing}
           onRefresh={isDemoMode ? undefined : refresh}
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
