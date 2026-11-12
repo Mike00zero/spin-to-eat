@@ -14,26 +14,31 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.example.spintoeat",
+      "bundleIdentifier": "com.pisanchik.spintoeat",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Spin to Eat uses your location to find restaurants near you."
       }
     },
     "android": {
-      "package": "com.example.spintoeat",
+      "package": "com.pisanchik.spintoeat",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFF6E8"
       },
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "REPLACE_WITH_ANDROID_MAPS_KEY"
+          "apiKey": "AIzaSyBcs13fu0r9SK2rshktziVh7RDqZKKDWUY"
         }
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -46,7 +51,21 @@
         }
       ],
       "expo-status-bar",
-      "expo-audio"
-    ]
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-image"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d5d0ec4b-b702-46a2-b280-4930059dab5f"
+      }
+    },
+    "owner": "mpisanchik"
   }
 }

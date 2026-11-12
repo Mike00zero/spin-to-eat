@@ -1,11 +1,31 @@
 import { Coords, Cuisine, Restaurant, Review, SortMode } from '../types';
 import { CUISINES } from '../cuisines';
 import { demoRestaurants } from './demo';
+import { cached, pruneCache } from './cache';
 
 const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY ?? '';
 export const isDemoMode = !API_KEY;
 
 const SEARCH_RADIUS_METERS = 8000; // ~5 miles
+const MAX_DISTANCE_KM = (SEARCH_RADIUS_METERS / 1000) * 2;
+
+// Caching: results are reused for CACHE_TTL_MS for the same cuisine within the same
+// ~1 km grid cell (lat/lng rounded to 2 decimals), so small GPS drift still hits the cache.
+// Kept short because "Open now" comes from the response and goes stale.
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const CACHE_PRUNE_MS = 24 * 60 * 60 * 1000; // expired entries are removed from disk after a day
+let pruned = false;
+
+function cacheKey(cuisine: Cuisine, near: Coords) {
+  return `places:${cuisine.id}:${near.latitude.toFixed(2)},${near.longitude.toFixed(2)}`;
+}
+
+/** Distances in cached results were measured from wherever the user was then; redo them for now. */
+function localize(list: Restaurant[], near: Coords): Restaurant[] {
+  return list
+    .map((r) => ({ ...r, distanceKm: distanceKm(near, r.location) }))
+    .filter((r) => r.distanceKm <= MAX_DISTANCE_KM); // keep it local
+}
 
 const FIELD_MASK = [
   'places.id',
@@ -72,16 +92,27 @@ export function sortRestaurants(list: Restaurant[], mode: SortMode): Restaurant[
   }
 }
 
+export type SearchOptions = { /** skip the cache and fetch fresh results (pull-to-refresh) */ force?: boolean };
+
 /**
  * Find restaurants of a cuisine near the user using the Google Places API (New)
- * Text Search endpoint. Falls back to demo data when no API key is set.
+ * Text Search endpoint, cached (see CACHE_TTL_MS). Falls back to demo data when no API key is set.
  */
-export async function searchRestaurants(cuisine: Cuisine, near: Coords): Promise<Restaurant[]> {
+export async function searchRestaurants(cuisine: Cuisine, near: Coords, opts: SearchOptions = {}): Promise<Restaurant[]> {
   if (isDemoMode) {
     await new Promise((r) => setTimeout(r, 600));
     return sortByRating(demoRestaurants(cuisine, near));
   }
+  if (!pruned) {
+    pruned = true;
+    pruneCache(CACHE_PRUNE_MS);
+  }
+  const list = await cached(cacheKey(cuisine, near), CACHE_TTL_MS, () => fetchFromGoogle(cuisine, near), opts);
+  return sortByRating(localize(list, near));
+}
 
+/** One uncached Places Text Search request. */
+async function fetchFromGoogle(cuisine: Cuisine, near: Coords): Promise<Restaurant[]> {
   const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
     headers: {
@@ -137,20 +168,20 @@ export async function searchRestaurants(cuisine: Cuisine, near: Coords): Promise
         distanceKm: distanceKm(near, location),
       };
     })
-    // Keep it local: drop anything far outside the search area.
-    .filter((r) => r.distanceKm <= (SEARCH_RADIUS_METERS / 1000) * 2);
+    .filter((r) => r.distanceKm <= MAX_DISTANCE_KM);
 
-  return sortByRating(restaurants);
+  return restaurants;
 }
 
 /**
  * Browse mode: run every wheel cuisine's search in parallel and merge them,
  * so each result is tagged with a cuisine the user can filter by. A place
  * found by more than one search keeps the first cuisine (wheel order).
- * Costs one Places request per cuisine (8 total).
+ * Each cuisine is cached separately, so browsing after a spin (or vice versa) only
+ * fetches the cuisines that aren't cached yet — at most 8 requests.
  */
-export async function searchAllRestaurants(near: Coords): Promise<Restaurant[]> {
-  const settled = await Promise.allSettled(CUISINES.map((c) => searchRestaurants(c, near)));
+export async function searchAllRestaurants(near: Coords, opts: SearchOptions = {}): Promise<Restaurant[]> {
+  const settled = await Promise.allSettled(CUISINES.map((c) => searchRestaurants(c, near, opts)));
   const ok = settled.filter((s): s is PromiseFulfilledResult<Restaurant[]> => s.status === 'fulfilled');
   if (ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
 

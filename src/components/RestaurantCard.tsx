@@ -1,8 +1,17 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Cuisine, Restaurant } from '../types';
 import { colors, radius, shadow } from '../theme';
 import { formatDistance, Price, Stars } from './ui';
+
+/**
+ * Places photo URLs carry the API key; leave it out of the cache key so the cached
+ * image stays valid if the key is ever rotated.
+ */
+function photoCacheKey(uri: string) {
+  return uri.replace(/([?&])key=[^&]*&?/, '$1').replace(/[?&]$/, '');
+}
 
 export function Photo({
   uri,
@@ -18,7 +27,18 @@ export function Photo({
   rounded?: boolean;
 }) {
   const style = { height, width: width ?? '100%', borderRadius: rounded ? radius.md : 0 } as const;
-  if (uri) return <Image source={{ uri }} style={[style, { backgroundColor: colors.line }]} resizeMode="cover" />;
+  if (uri)
+    return (
+      <Image
+        // Each Places photo load is a billed request, so keep them on disk and in memory:
+        // the list card and the details gallery share the same URL and cached image.
+        source={{ uri, cacheKey: photoCacheKey(uri) }}
+        cachePolicy="memory-disk"
+        contentFit="cover"
+        transition={150}
+        style={[style, { backgroundColor: colors.line }]}
+      />
+    );
   return (
     <View style={[style, styles.placeholder, { backgroundColor: cuisine.color }]}>
       <Text style={{ fontSize: height * 0.4 }}>{cuisine.emoji}</Text>

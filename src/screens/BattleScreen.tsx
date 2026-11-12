@@ -8,7 +8,7 @@ import { Button, formatDistance } from '../components/ui';
 import { DiceDuel } from '../components/games/DiceDuel';
 import { HighCard } from '../components/games/HighCard';
 import { TicTacToe } from '../components/games/TicTacToe';
-import { GAMES, GameId, Player, PlayerIndex, randomGame } from '../components/games/types';
+import { GAMES, GameId, Player, PlayerIndex } from '../components/games/types';
 import { Coords, Cuisine, Restaurant } from '../types';
 import { colors, radius, shadow } from '../theme';
 
@@ -23,6 +23,20 @@ type Step =
   | { name: 'winner'; winner: PlayerIndex | null }; // null = both picked the same thing
 
 const PLAYER_COLORS = [colors.orange, colors.navy];
+
+/** Best of 3: first to this many round wins takes the battle. */
+const WINS_NEEDED = 2;
+const MAX_ROUNDS = WINS_NEEDED * 2 - 1;
+
+/** A random order of the games, so each round of a match plays a different one. */
+function shuffledGames(): GameId[] {
+  const ids = GAMES.map((g) => g.id);
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+  return ids;
+}
 
 type Props = {
   coords: Coords | null;
@@ -47,8 +61,30 @@ export function BattleScreen({ coords, onBack, onCuisine, onRestaurant }: Props)
   const [mode, setMode] = useState<Mode>('cuisine');
   const [step, setStep] = useState<Step>({ name: 'setup' });
   const [picks, setPicks] = useState<[Pick | null, Pick | null]>([null, null]);
-  const [game, setGame] = useState<GameId>(() => randomGame());
-  const [gameKey, setGameKey] = useState(0); // remounts the game for a rematch
+  // The match: one game per round, and who won each round so far.
+  const [order, setOrder] = useState<GameId[]>(shuffledGames);
+  const [rounds, setRounds] = useState<PlayerIndex[]>([]);
+  const [gameKey, setGameKey] = useState(0); // remounts the game for each round
+  const score: [number, number] = [rounds.filter((w) => w === 0).length, rounds.filter((w) => w === 1).length];
+  const round = rounds.length + 1;
+  const game = order[(round - 1) % order.length];
+  const gameInfo = GAMES.find((g) => g.id === game)!;
+  const lastRoundWinner = rounds.length ? rounds[rounds.length - 1] : null;
+
+  const resetMatch = () => {
+    setOrder(shuffledGames());
+    setRounds([]);
+    setGameKey((k) => k + 1);
+  };
+
+  const roundWon = (w: PlayerIndex) => {
+    const next = [...rounds, w];
+    setRounds(next);
+    setGameKey((k) => k + 1);
+    const wins = next.filter((x) => x === w).length;
+    if (wins >= WINS_NEEDED || next.length >= MAX_ROUNDS) setStep({ name: 'winner', winner: w });
+    else setStep({ name: 'versus' }); // scoreboard + next round's game
+  };
 
   const players: [Player, Player] = [
     { name: names[0].trim() || 'Player 1', color: PLAYER_COLORS[0] },
@@ -82,19 +118,19 @@ export function BattleScreen({ coords, onBack, onCuisine, onRestaurant }: Props)
     } else if (pickId(next[0]!) === pickId(p)) {
       setStep({ name: 'winner', winner: null }); // great minds think alike — no battle needed
     } else {
-      setGame(randomGame());
+      resetMatch();
       setStep({ name: 'versus' });
     }
   };
 
   const startOver = () => {
     setPicks([null, null]);
+    resetMatch();
     setStep({ name: 'setup' });
   };
 
   const rematch = () => {
-    setGame(randomGame(game));
-    setGameKey((k) => k + 1);
+    resetMatch();
     setStep({ name: 'versus' });
   };
 
@@ -149,7 +185,7 @@ export function BattleScreen({ coords, onBack, onCuisine, onRestaurant }: Props)
             ))}
           </View>
 
-          <Text style={styles.label}>Possible games</Text>
+          <Text style={styles.label}>Best of 3 · first to 2 wins</Text>
           {GAMES.map((g) => (
             <Text key={g.id} style={styles.gameLine}>
               {g.emoji}  <Text style={{ fontWeight: '800', color: colors.ink }}>{g.name}</Text> · {g.blurb}
@@ -186,25 +222,42 @@ export function BattleScreen({ coords, onBack, onCuisine, onRestaurant }: Props)
 
       {step.name === 'versus' && picks[0] && picks[1] && (
         <ScrollView contentContainerStyle={[styles.body, { alignItems: 'center' }]}>
+          {lastRoundWinner !== null && (
+            <Text style={[styles.roundResult, { color: players[lastRoundWinner].color }]}>
+              {players[lastRoundWinner].name} takes round {rounds.length}!
+            </Text>
+          )}
+          <Scoreboard players={players} score={score} rounds={rounds} />
           <PickCard player={players[0]} pick={picks[0]} />
           <Text style={styles.vs}>VS</Text>
           <PickCard player={players[1]} pick={picks[1]} />
           <View style={styles.gameAnnounce}>
-            <Text style={styles.gameKicker}>TONIGHT'S GAME</Text>
-            <Text style={styles.gameName}>
-              {GAMES.find((g) => g.id === game)!.emoji} {GAMES.find((g) => g.id === game)!.name}
+            <Text style={styles.gameKicker}>
+              ROUND {round}
+              {score[0] === WINS_NEEDED - 1 && score[1] === WINS_NEEDED - 1 ? ' · DECIDER' : ''}
             </Text>
-            <Text style={styles.gameBlurb}>{GAMES.find((g) => g.id === game)!.blurb}</Text>
+            <Text style={styles.gameName}>
+              {gameInfo.emoji} {gameInfo.name}
+            </Text>
+            <Text style={styles.gameBlurb}>{gameInfo.blurb}</Text>
           </View>
-          <Button title="Fight! ⚔️" onPress={() => setStep({ name: 'game' })} style={{ alignSelf: 'stretch', marginTop: 20 }} />
+          <Button
+            title={round === 1 ? 'Fight! ⚔️' : `Start round ${round} ⚔️`}
+            onPress={() => setStep({ name: 'game' })}
+            style={{ alignSelf: 'stretch', marginTop: 20 }}
+          />
         </ScrollView>
       )}
 
       {step.name === 'game' && (
         <ScrollView contentContainerStyle={[styles.body, { alignItems: 'center' }]}>
-          {game === 'tictactoe' && <TicTacToe key={gameKey} players={players} onWinner={(w) => setStep({ name: 'winner', winner: w })} />}
-          {game === 'dice' && <DiceDuel key={gameKey} players={players} onWinner={(w) => setStep({ name: 'winner', winner: w })} />}
-          {game === 'card' && <HighCard key={gameKey} players={players} onWinner={(w) => setStep({ name: 'winner', winner: w })} />}
+          <Text style={styles.gameKicker}>
+            ROUND {round} OF {MAX_ROUNDS}
+          </Text>
+          <Scoreboard players={players} score={score} rounds={rounds} />
+          {game === 'tictactoe' && <TicTacToe key={gameKey} players={players} onWinner={roundWon} />}
+          {game === 'dice' && <DiceDuel key={gameKey} players={players} onWinner={roundWon} />}
+          {game === 'card' && <HighCard key={gameKey} players={players} onWinner={roundWon} />}
         </ScrollView>
       )}
 
@@ -220,6 +273,10 @@ export function BattleScreen({ coords, onBack, onCuisine, onRestaurant }: Props)
             <>
               <Text style={styles.trophy}>🏆</Text>
               <Text style={[styles.winTitle, { color: players[step.winner].color }]}>{players[step.winner].name} wins!</Text>
+              <Scoreboard players={players} score={score} rounds={rounds} />
+              <Text style={styles.finalScore}>
+                {Math.max(...score)}–{Math.min(...score)} in the best of 3
+              </Text>
               <Text style={styles.lead}>
                 Sorry {players[step.winner === 0 ? 1 : 0].name}, you're having {pickLabel(picks[step.winner]!)}.
               </Text>
@@ -242,12 +299,35 @@ export function BattleScreen({ coords, onBack, onCuisine, onRestaurant }: Props)
             );
           })()}
           {step.winner !== null && (
-            <Button title="Rematch (different game)" variant="secondary" onPress={rematch} style={{ alignSelf: 'stretch', marginTop: 10 }} />
+            <Button title="Rematch (best of 3)" variant="secondary" onPress={rematch} style={{ alignSelf: 'stretch', marginTop: 10 }} />
           )}
           <Button title="New battle" variant="secondary" onPress={startOver} style={{ alignSelf: 'stretch', marginTop: 10 }} />
         </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+/** Both players' round wins, with one dot per round slot (filled = round won). */
+function Scoreboard({ players, score, rounds }: { players: [Player, Player]; score: [number, number]; rounds: PlayerIndex[] }) {
+  return (
+    <View style={styles.scoreboard}>
+      {players.map((p, i) => (
+        <View key={i} style={[styles.scoreSide, i === 1 && { alignItems: 'flex-end' }]}>
+          <Text style={[styles.scoreName, { color: p.color }]} numberOfLines={1}>
+            {p.name}
+          </Text>
+          <View style={styles.scoreDots}>
+            {Array.from({ length: WINS_NEEDED }, (_, d) => (
+              <View key={d} style={[styles.scoreDot, { borderColor: p.color }, d < score[i] && { backgroundColor: p.color }]} />
+            ))}
+          </View>
+        </View>
+      ))}
+      <Text style={styles.scoreNumbers} accessibilityLabel={`Score ${score[0]} to ${score[1]}, ${rounds.length} rounds played`}>
+        {score[0]} – {score[1]}
+      </Text>
+    </View>
   );
 }
 
@@ -402,6 +482,28 @@ const styles = StyleSheet.create({
   gameKicker: { fontSize: 12, fontWeight: '800', letterSpacing: 1.5, color: colors.muted },
   gameName: { fontSize: 26, fontWeight: '900', color: colors.ink, marginTop: 6 },
   gameBlurb: { color: colors.muted, marginTop: 4 },
+  roundResult: { fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 4 },
+  scoreboard: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginVertical: 12,
+    ...shadow,
+    shadowOpacity: 0.06,
+  },
+  // 40% each leaves the middle free for the score, so long names never run under it.
+  scoreSide: { maxWidth: '40%', gap: 6 },
+  scoreName: { fontWeight: '900', fontSize: 15 },
+  scoreDots: { flexDirection: 'row', gap: 6 },
+  scoreDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2 },
+  // Centered between the two sides.
+  scoreNumbers: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontSize: 26, fontWeight: '900', color: colors.ink },
+  finalScore: { color: colors.muted, fontWeight: '700', marginTop: -4 },
   trophy: { fontSize: 72, marginTop: 10 },
   winTitle: { fontSize: 32, fontWeight: '900', color: colors.ink, textAlign: 'center' },
   prize: { marginTop: 20, alignSelf: 'stretch', alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.lg, padding: 20, ...shadow },

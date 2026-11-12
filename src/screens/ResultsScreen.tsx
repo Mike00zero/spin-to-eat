@@ -44,17 +44,39 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
   const [error, setError] = useState<string | null>(null);
   const map = useRef<MapView>(null);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchList = useCallback(
+    (force: boolean) =>
+      cuisine ? searchRestaurants(cuisine, coords, { force }) : searchAllRestaurants(coords, { force }),
+    [cuisine, coords],
+  );
+
   const load = useCallback(async () => {
     setError(null);
     setResults(null);
     try {
-      const list = cuisine ? await searchRestaurants(cuisine, coords) : await searchAllRestaurants(coords);
+      const list = await fetchList(false); // served from cache when possible
       setResults(list);
       setCache(list);
     } catch (e: any) {
       setError(e?.message ?? 'Something went wrong.');
     }
-  }, [cuisine, coords, setCache]);
+  }, [fetchList, setCache]);
+
+  // Pull-to-refresh: bypass the cache but keep the current list on screen meanwhile.
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const list = await fetchList(true);
+      setResults(list);
+      setCache(list);
+    } catch {
+      // keep showing what we have
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchList, setCache]);
 
   useEffect(() => {
     if (!cache) load();
@@ -157,6 +179,13 @@ export function ResultsScreen({ cuisine, coords, usingFallbackLocation, onBack, 
         <FlatList
           data={items}
           keyExtractor={(r) => r.id}
+          // Every card shows a billed Places photo. FlatList's defaults render about ten
+          // screens ahead, so keep the window small: cards (and photos) load as you scroll.
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
+          refreshing={refreshing}
+          onRefresh={isDemoMode ? undefined : refresh}
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
           renderItem={({ item, index }) => (
             <RestaurantCard restaurant={item} rank={index + 1} cuisine={cuisineById(item.cuisineId)} onPress={() => onOpen(item)} />
