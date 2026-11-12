@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
-import { Animated, Image, Linking, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Animated, Linking, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { Photo } from '../components/RestaurantCard';
@@ -189,7 +190,7 @@ export function DetailsScreen({ restaurant: r, cuisine, onBack }: { restaurant: 
             <View key={i} style={styles.review}>
               <View style={styles.row}>
                 {rev.authorPhoto ? (
-                  <Image source={{ uri: rev.authorPhoto }} style={styles.avatar} />
+                  <Image source={{ uri: rev.authorPhoto }} cachePolicy="memory-disk" style={styles.avatar} />
                 ) : (
                   <View style={[styles.avatar, { backgroundColor: cuisine.color, alignItems: 'center', justifyContent: 'center' }]}>
                     <Text style={{ color: '#fff', fontWeight: '800' }}>{rev.author[0]}</Text>
