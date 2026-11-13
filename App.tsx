@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { LoadingScreen } from './src/components/LoadingScreen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ResultsScreen } from './src/screens/ResultsScreen';
@@ -19,7 +21,12 @@ type Route =
   | { name: 'results'; cuisine: Cuisine | null }
   | { name: 'details'; cuisine: Cuisine | null; restaurant: Restaurant };
 
+// Keep the native splash up until LoadingScreen is on screen to take over from it.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function App() {
+  const [loading, setLoading] = useState(true);
+  const finishLoading = useCallback(() => setLoading(false), []);
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [cache, setCache] = useState<Restaurant[] | null>(null);
   // Lives here so the chosen sort survives a trip to the details screen.
@@ -110,6 +117,7 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       {screen}
+      {loading && <LoadingScreen onDone={finishLoading} />}
     </SafeAreaProvider>
   );
 }

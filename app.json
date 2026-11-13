@@ -1,22 +1,17 @@
 {
   "expo": {
-    "name": "Spin to Eat",
+    "name": "Spin to Dine",
     "slug": "spin-to-eat",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFF6E8"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.pisanchik.spintoeat",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Spin to Eat uses your location to find restaurants near you.",
+        "NSLocationWhenInUseUsageDescription": "Spin to Dine uses your location to find restaurants near you.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -49,7 +44,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Spin to Eat uses your location to find restaurants near you."
+          "locationWhenInUsePermission": "Spin to Dine uses your location to find restaurants near you."
         }
       ],
       "expo-status-bar",
@@ -61,7 +56,16 @@
           "enableBackgroundPlayback": false
         }
       ],
-      "expo-image"
+      "expo-image",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFF6E8"
+        }
+      ]
     ],
     "extra": {
       "eas": {

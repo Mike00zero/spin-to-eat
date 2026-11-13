@@ -1,4 +1,4 @@
-# Spin to Eat
+# Spin to Dine
 
 Can't decide where to eat? Spin the wheel, get a food type, and see the best-rated
 restaurants of that type near you — with Google ratings, reviews, photos, price

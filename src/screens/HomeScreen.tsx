@@ -24,7 +24,7 @@ export function HomeScreen({ onFindPlaces, onBattle }: { onFindPlaces: (c: Cuisi
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.title}>Spin to Eat</Text>
+        <Text style={styles.title}>Spin to Dine</Text>
         <Text style={styles.subtitle}>Can't decide? Let the wheel pick.</Text>
       </View>
 
